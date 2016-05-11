@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="FMApp">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>euphony File Manager</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
+<link href="css/bootstrap.min.css" rel="stylesheet">
+<script src="js/jquery.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="js/angular.min.js"></script>
+<script src="js/angular-file.js"></script>
+<script src="js/app.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<link rel='stylesheet' href='css/loading-bar.min.css' type='text/css' media='all' />
+<script type='text/javascript' src='js/loading-bar.min.js'></script>
+<style type="text/css">
+.sortable {
+	cursor: pointer;
+}
+.nolink,.nolink:hover {
+	text-decoration: none;
+	color: #333;
+}
+
+.glyphicon.spinning {
+	animation: spin 1s infinite linear;
+	-webkit-animation: spin2 1s infinite linear;
+}
+
+@keyframes spin {
+	from {transform: scale(1) rotate(0deg);
+}
+
+to {
+	transform: scale(1) rotate(360deg);
+}
+
+}
+@-webkit-keyframes spin2 {from { -webkit-transform:rotate(0deg);
+	
+}
+
+to {
+	-webkit-transform: rotate(360deg);
+}
+</style>
+    <script>
+    var GLOBAL_JOBS='';
+	<% if (jobs) { %>
+    	var GLOBAL_JOBS='<%= jobs %>';
+	<% } %>
+	function openLoonSettings() {
+		var win = window.open(window.location.protocol + "//" + window.location.hostname + "/settings", '_blank');
+		win.focus();
+	}
+
+</script>
+
+</head>
+
+<body ng-controller="FileManagerCtr as FM">
+	<div class="modal fade" id="createFolderModal">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header bg-info">
+					<h4><span class="glyphicon glyphicon-question-sign"></span> New Folder</h4>
+				</div>
+				<div class="modal-body">
+
+					<div class="form-horizontal">
+						<div class="form-group form-group-md">
+							<label class="col-sm-6 control-label">Path: {{FM.curFolderPath + FM.newFolderName + '/'}}</label>
+							<div class="col-sm-6">
+								<input class="form-control" ng-model="FM.newFolderName" placeholder="new folder name" />
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-warning" data-dismiss="modal" ng-disabled="!FM.newFolderName"
+						ng-click="FM.createFolder(FM.newFolderName)">Create</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" id="uploadFileModal">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header bg-info">
+					<h4><span class="glyphicon glyphicon-question-sign"></span> Upload Files</h4>
+				</div>
+				<div class="modal-body">
+					<div class="form-horizontal">
+						<div class="form-group form-group-md">
+							<label class="col-sm-7 control-label text-left">Upload to: {{FM.curFolderPath + FM.uploadFile.name}}</label>
+							<div class="col-sm-5">
+								<input type="file" class="form-control" ng-model="FM.uploadFiles" multiple />
+							</div>
+							<h3>&nbsp;</h3>
+							<div class="col-sm-12">
+								<table class="table table-hover table-striped">
+									<thead ng-show="FM.uploadFiles">
+										<tr>
+											<th>Name</th>
+											<th>Type</th>
+											<th>Size</th>
+										</tr>
+
+									</thead>
+									<tbody>
+										<tr ng-repeat="f in FM.uploadFiles" style="font: smaller">
+											<td>{{f.name}}</td>
+											<td>{{f.type}}</td>
+											<td>{{f.size/1024/1024|number:2}} MB</td>
+										</tr>
+									<tbody>
+								</table>
+							</div>
+
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-warning" data-dismiss="modal" ng-disabled="!FM.uploadFiles" ng-click="FM.upload()">Upload</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" id="renameModal">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header bg-info">
+					<h4><span class="glyphicon glyphicon-question-sign"></span> Rename</h4>
+				</div>
+				<div class="modal-body">
+					<div class="form-horizontal">
+						<div class="form-group form-group-md">
+							<label class="col-sm-3 control-label">New name</label>
+							<div class="col-sm-5">
+								<input class="form-control" ng-model="FM.newName" placeholder="{{FM.selection[0].name}}" />
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-warning" data-dismiss="modal" ng-disabled="!FM.newName" ng-click="FM.rename(FM.newName)">Rename</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" id="copymoveModal">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header bg-info">
+					<h4><span class="glyphicon glyphicon-question-sign"></span> {{FM.copymoveFlag}}</h4>
+				</div>
+
+				<div class="modal-body">
+					<div class="form-horizontal">
+						<div class="form-group form-group-md">
+							<label class="col-sm-2 control-label">Target</label>
+							<div class="col-sm-5">
+								<input class="form-control" ng-model="FM.copymoveTarget" />
+							</div>
+							<div class="col-sm-5 text-center">
+								<button type="button" class="btn btn-info btn-md" data-toggle="collapse" data-target="#dirtree">
+									<span class="glyphicon glyphicon-folder-close"></span> Select directory &hellip;
+								</button>
+							</div>
+						</div>
+						<div class="collapse" id="dirtree">
+							<ol class="breadcrumb">
+								<span class="glyphicon glyphicon-home"></span>
+								<li ng-repeat="p in FM.curFolderBreadCrumbPaths"><a ng-click="FM.clickFolder(p)">{{p.name}}</a></li>
+								<span class="pull-right"> <a title="Media directory - usb devices are mounted here" class="media-middle well-sm"
+									ng-click="FM.clickFolder('/Media/')"><span class="glyphicon glyphicon-hdd"></span></a> <a
+									title="Music directory - where MPD looks for songs" class="media-middle well-sm" ng-click="FM.clickFolder('/Music/')"><span
+										class="glyphicon glyphicon-music"></span></a>
+								</span>
+							</ol>
+
+							<table class="table table-hover table-striped">
+								<tbody>
+									<tr class="sortable" ng-repeat="folder in FM.folders4Choose">
+										<td style="vertical-align: middle;" ng-click="FM.clickFolder(folder)"><a title="Enter this dir">{{folder.name}}</a></td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+
+
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-warning" data-dismiss="modal" ng-disabled="!FM.copymoveTarget"
+						ng-click="FM.copymove(FM.copymoveTarget)">{{FM.copymoveFlag}}</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" id="deleteConfirmationModal">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header bg-warning">
+					<h4><span class="glyphicon glyphicon-exclamation-sign"></span> Confirmation</h4>
+				</div>
+				<div class="modal-body" ng-controller="OrderByController as OB">
+					<div class="alert alert-info">You are about to delete these items:</div>
+					<table class="table table-hover table-striped">
+						<tbody>
+							<tr ng-repeat="item in FM.selection | orderBy:predicate:reverse">
+								<td><span
+									class="{{item.folder ? 'glyphicon glyphicon-folder-close' : 'glyphicon glyphicon-file'}}"></span></td>
+								<td>{{item.name}}</td>
+								<td>{{item.humanSize}}</td>
+								<td>{{item.humanTime}}</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="alert alert-info text-right">Are you sure?</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-danger" data-dismiss="modal" ng-click="FM.del()">Yes, delete!</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" id="folderInfoModal">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header bg-info">
+					<h4><span class="glyphicon glyphicon-info-sign"></span> Folder info: </h4>
+				</div>
+				<div class="modal-body" ng-show="!FM.folderInfo.name">
+					<span>Calculating file count and total size. Please wait... </span><span class="glyphicon glyphicon-repeat spinning"></span>
+				</div>
+				<div class="modal-body" ng-show="FM.folderInfo.name">
+					<h5>Folder: <strong>{{FM.folderInfo.name}}</strong></h5>
+					<h5>Total size:<strong> {{FM.folderInfo.size}}</strong></h5>
+					<h5>Total file count:<strong> {{FM.folderInfo.count}}</strong></h5>
+					<div id="device" ng-show="FM.folderInfo.dev">
+						<br/>
+						<h4>Block device is attached here.</h4>
+						<h5>Device type:<strong> {{FM.folderInfo.type}}</strong></h5>
+						<h5>Device:<strong> {{FM.folderInfo.dev}}</strong></h5>
+						<h5>Label:<strong> {{FM.folderInfo.label}}</strong></h5>
+						<h5>Vendor and model:<strong> {{FM.folderInfo.vendor}}{{FM.folderInfo.model}}</strong></h5>
+						<h5>Partition size:<strong> {{FM.folderInfo.partsize}}</strong></h5>
+						<h5>Device size:<strong> {{FM.folderInfo.devsize}}</strong></h5>
+						<h5>Access:<strong> {{FM.folderInfo.rw}}</strong></h5>
+						<button title="Unmount/Eject (for safe removal)" class="btn btn-warning" ng-click="FM.umount()"><i class="glyphicon glyphicon-eject"></i> Unmount/Eject</button>
+					</div>
+					<div id="device" ng-show="FM.folderInfo.networkpath">
+						<br/>
+						<h4>Network device is attached here.</h4>
+						<h5>Network path:<strong> {{FM.folderInfo.networkpath}}</strong></h5>
+						<h5>Share type:<strong> {{FM.folderInfo.sharetype}}</strong></h5>
+						<h5>Access:<strong> {{FM.folderInfo.rw}}</strong></h5>
+						<button title="Unlink network device" class="btn btn-warning" ng-click="FM.umount()"><i class="glyphicon glyphicon-remove-circle"></i> Unlink</button>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	<nav class="navbar navbar-inverse navbar-static-top">
+		<div class="container">
+			<div class="navbar-header">
+				<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+					<span class="icon-bar"></span> <span class="icon-bar"></span> <span class="icon-bar"></span>
+				</button>
+				<a class="navbar-brand" style="white-space: nowrap; padding: 5px;" href="/"><img src="/favicon-96x96-blackbg.png"
+					style="height: 40px; display: inline-block;"> <span style="vertical-align: middle;">euphony File Manager</span></a>
+			</div>
+			<div class="navbar-collapse collapse">
+				<ul class="nav navbar-nav navbar-right">
+					<li id="menu_filemanager"><a href onclick="openLoonSettings();"><i class="glyphicon glyphicon-cog"></i> euphony Settings</a></li>
+				</ul>
+			</div>
+		</div>
+	</nav>
+	<div id="successAlert" class="alert alert-success text-center" role="alert" style="display: none;">
+		<button type="button" class="close" alert-label="Close" ng-click="FM.closeSuccessAlert()">
+			<span aria-hidden="true">&times</span>
+		</button>
+		<span>{{FM.successData}} </span><span id="spinner" class="glyphicon glyphicon-repeat spinning" style="display: none;"></span>
+	</div>
+	<div id="inprogressAlert" class="alert alert-info text-center" role="alert"
+		style="display: none; position: fixed; top: 70px; left: 20%; right: 20%; z-index: 1;">
+		<span>{{FM.inprogressData}} </span><span class="glyphicon glyphicon-repeat spinning"></span>
+	</div>
+
+	<div id="errorAlert" class="alert alert-danger" role="alert" style="display: none">
+		<button type="button" class="close" alert-label="Close" ng-click="FM.closeErrorAlert()">
+			<span aria-hidden="true">&times</span>
+		</button>
+		<span>{{FM.errorData}}</span>
+	</div>
+
+	<div class="container">
+		<div class="btn-toolbar">
+			<button type="button" class="btn btn-warning" ng-disabled="FM.btnDisabled('move')" ng-click="FM.copymovePrepare('Move')">
+				<span class="glyphicon glyphicon-random"></span><span class="hidden-xs"> Move</span>
+			</button>
+			<button type="button" class="btn btn-info" ng-disabled="FM.btnDisabled('copy')" ng-click="FM.copymovePrepare('Copy')">
+				<span class="glyphicon glyphicon-copy"></span><span class="hidden-xs"> Copy</span>
+			</button>
+			<button type="button" class="btn btn-warning" ng-disabled="FM.btnDisabled('rename')" data-toggle="modal" data-target="#renameModal">
+				<span class="glyphicon glyphicon-font"></span><span class="hidden-xs"> Rename</span>
+			</button>
+			<button type="button" class="btn btn-danger" ng-disabled="FM.btnDisabled('delete')" ng-click="FM.delConfirm()">
+				<span class="glyphicon glyphicon-trash"></span><span class="hidden-xs"> Delete</span>
+			</button>
+			<button type="button" class="btn btn-warning" ng-disabled="FM.btnDisabled('create_folder')" data-toggle="modal"
+				data-target="#createFolderModal">
+				<span class="glyphicon glyphicon-plus-sign"></span><span class="hidden-xs"> New folder</span>
+			</button>
+			<button type="button" class="btn btn-info pull-right" ng-disabled="FM.btnDisabled('upload_file')" data-toggle="modal"
+				data-target="#uploadFileModal">
+				<span class="glyphicon glyphicon-upload"></span><span class="hidden-xs"> Upload</span>
+			</button>
+			<button type="button" class="btn btn-info pull-right" ng-disabled="FM.btnDisabled('download')" ng-click="FM.download()">
+				<span class="glyphicon glyphicon-download"></span><span class="hidden-xs"> Download</span>
+			</button>
+		</div>
+		<div style="height: 10px"></div>
+		<ol class="breadcrumb">
+			<span class="glyphicon glyphicon-home"></span>
+			<li ng-repeat="p in FM.curBreadCrumbPaths"><a href={{p.path}}>{{p.name}}</a></li>
+			<a title="Refresh" href class="media-middle well-lg" ng-click="FM.refresh()"><span class="glyphicon glyphicon-refresh"> </span></a>
+			<span class="pull-right"> <a title="Media directory - usb devices are mounted here" class="well-sm" href="#/Media/"><span
+					class="glyphicon glyphicon-hdd"> </span></a> <a title="Music directory - where MPD looks for songs" class="well-sm" href="#/Music/"><span
+					class="glyphicon glyphicon-music"> </span></a>
+			</span>
+		</ol>
+
+		<div id="files-table" ng-controller="OrderByController as OB">
+			<table class="table table-hover table-striped">
+				<thead>
+					<tr class="sortable">
+						<th style="width: 1%"><input type="checkbox" value="" title="Select all" ng-model="FM.selectAll"></th>
+						<th style="width: 1%" title="Click to sort" class="text-center" ng-click="order('folder')">Type<span
+							ng-show="predicate == 'folder'"><span ng-show="reverse" class="glyphicon glyphicon-sort-by-attributes-alt"></span><span ng-show="!reverse"
+								class="glyphicon glyphicon-sort-by-attributes"></span></span></th>
+						<th title="Click to sort" ng-click="order('name')">Name<span ng-show="predicate == 'name'"><span ng-show="reverse"
+								class="glyphicon glyphicon-sort-by-alphabet-alt"></span><span ng-show="!reverse" class="glyphicon glyphicon-sort-by-alphabet"></span></span></th>
+						<th style="width: 1%" title="Click to sort" class="text-right" ng-click="order('size')">Size<span ng-show="predicate == 'size'"><span ng-show="reverse"
+								class="glyphicon glyphicon-sort-by-order-alt"></span><span ng-show="!reverse" class="glyphicon glyphicon-sort-by-order"></span></span></th>
+						<th style="width: 1%" title="Click to sort" class="text-right" ng-click="order('mtime')">Date/Time<span ng-show="predicate == 'mtime'"><span ng-show="reverse"
+								class="glyphicon glyphicon-sort-by-order-alt"></span><span ng-show="!reverse" class="glyphicon glyphicon-sort-by-order"></span></span></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr ng-repeat="file in FM.curFiles | orderBy:predicate:reverse">
+						<td><input title="Select this item" type="checkbox" value="{{file.name}}" ng-model="file.selected"></td>
+						<td ng-click="FM.clickInfo(file)" class="text-center {{(file.folder ? 'sortable': '')}}"><a class="{{(file.folder ? '': 'nolink')}}"
+							title="{{(file.folder ? 'Click for info': '')}}"> <span
+								class="{{file.folder ? 'glyphicon glyphicon-folder-close' : 'glyphicon glyphicon-file'}}"></span>
+						</a></td>
+						<td ng-click="FM.clickFile(file)" class="{{(file.folder ? 'sortable': '')}}"><a class="{{(file.folder ? '': 'nolink')}}"
+							title="{{(file.folder ? 'Click to enter dir': '')}}">{{file.name}}</a></td>
+						<td class="text-right text-nowrap">{{file.humanSize}}</td>
+						<td class="text-right text-nowrap" title="{{file.humanDate}} {{file.humanTime}}">{{file.humanDate}} <span class="hidden-xs">{{file.humanTime}}</span></td>
+					</tr>
+				</tbody>
+			</table>
+
+		</div>
+
+
+	</div>
+</body>
+</html>
